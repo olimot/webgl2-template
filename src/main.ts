@@ -84,8 +84,6 @@ listenInputEvents(canvas, ({ keys, delta, buttons }) => {
     pinchOrbit(view, target, delta);
   } else if (keys.Space || buttons === 4) {
     moveXY(view, target, delta);
-  } else {
-    return;
   }
 });
 
