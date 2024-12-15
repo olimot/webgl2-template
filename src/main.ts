@@ -2,16 +2,15 @@ import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
 
 // # setup canvas
 const canvas = document.getElementById("screen") as HTMLCanvasElement;
+canvas.style.touchAction = "none";
 
 // ## setup resize handler
 let resizeTask: number = 0;
 new ResizeObserver(([entry]) => {
+  clearTimeout(resizeTask);
   const [{ inlineSize, blockSize }] = entry.devicePixelContentBoxSize;
   const size = { width: inlineSize, height: blockSize };
-  clearTimeout(resizeTask);
-  resizeTask = setTimeout(() => {
-    updateCameraMatrices(Object.assign(canvas, size));
-  }, 150);
+  resizeTask = setTimeout(() => Object.assign(canvas, size), 150);
 }).observe(canvas, { box: "content-box" });
 
 // # create camera matrices
@@ -67,7 +66,6 @@ const onPointerEvent = (() => {
   const temp3 = vec3.create();
   return (e: PointerEvent) => {
     if (!e.buttons || (!e.movementX && !e.movementY)) return;
-
     const { offsetX: x, offsetY: y, movementX: dX, movementY: dY } = e;
 
     if (e.buttons & 1) {
