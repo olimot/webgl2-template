@@ -260,5 +260,3 @@ requestAnimationFrame(function frame() {
 
   requestAnimationFrame(frame);
 });
-
-export {};
