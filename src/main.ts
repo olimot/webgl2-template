@@ -16,31 +16,24 @@ new ResizeObserver(([entry]) => {
 
 // # create camera matrices
 const up: ReadonlyVec3 = vec3.fromValues(0, 1, 0);
-const projection = mat4.create();
 const eye = vec3.fromValues(2, 2, 2);
 const target = vec3.fromValues(0, 0, 0);
 const view = mat4.lookAt(mat4.create(), eye, target, up);
+const projection = mat4.create();
 const viewProjection = mat4.identity(mat4.create());
 const invViewProj = mat4.identity(mat4.create());
-let yfov = Math.PI / 4;
+const near = 0.01;
+const far = 1024;
+const yfov = Math.PI / 4;
 
 function updateCameraMatrices(target = canvas) {
   const aspectRatio = target.clientWidth / target.clientHeight;
-  mat4.ortho(projection, -2 * aspectRatio, 2 * aspectRatio, -2, 2, 0, 4); // alternatively
-  mat4.perspective(projection, yfov, aspectRatio, 0.01, +Infinity);
+  mat4.perspective(projection, yfov, aspectRatio, near, far);
   mat4.multiply(viewProjection, projection, view);
   mat4.invert(invViewProj, viewProjection);
 }
 
 // ## add camera control
-const position = vec3.create();
-const tempVec3 = vec3.create();
-const temp2Vec3 = vec3.create();
-const delta = vec3.create();
-const prev = vec3.create();
-const N = vec3.create();
-const V = vec3.create();
-
 function raycastToPlane(
   out: vec3,
   P_0: ReadonlyVec3,
@@ -52,44 +45,63 @@ function raycastToPlane(
   return vec3.scaleAndAdd(out, P_0, V, t);
 }
 
-function toTargetPlaneFromCanvas(out: vec3, x: number, y: number) {
-  out[0] = (x / canvas.clientWidth) * 2 - 1;
-  out[1] = (-y / canvas.clientHeight) * 2 + 1;
-  out[2] = -1;
-  vec3.transformMat4(out, out, invViewProj);
-  vec3.normalize(N, vec3.subtract(N, eye, target));
-  vec3.normalize(V, vec3.subtract(V, out, eye));
-  return raycastToPlane(out, out, V, N, vec3.dot(target, N));
-}
+const raycastToTargetPlane = (() => {
+  const temp = vec3.create();
+  const temp2 = vec3.create();
+  const temp3 = vec3.create();
+  return (out: vec3, x: number, y: number) => {
+    temp[0] = (x / canvas.clientWidth) * 2 - 1;
+    temp[1] = (-y / canvas.clientHeight) * 2 + 1;
+    temp[2] = -1;
+    const P_0 = vec3.transformMat4(temp, temp, invViewProj);
+    const N = vec3.normalize(temp2, vec3.sub(temp2, eye, target));
+    const V = vec3.normalize(temp3, vec3.sub(temp3, P_0, eye));
+    const d = vec3.dot(target, N);
+    return raycastToPlane(out, P_0, V, N, d);
+  };
+})();
 
-function vector(out: vec3, a: ReadonlyVec3, b: ReadonlyVec3) {
-  return vec3.normalize(out, vec3.sub(out, a, b));
-}
+const onPointerEvent = (() => {
+  const temp = vec3.create();
+  const temp2 = vec3.create();
+  const temp3 = vec3.create();
+  return (e: PointerEvent) => {
+    if (!e.buttons || (!e.movementX && !e.movementY)) return;
 
-function onPointerEvent(event: PointerEvent) {
-  if (!event.buttons || (!event.movementX && !event.movementY)) return;
+    const { offsetX: x, offsetY: y, movementX: dX, movementY: dY } = e;
 
-  const { offsetX: x, offsetY: y } = event;
-  toTargetPlaneFromCanvas(position, x, y);
-  toTargetPlaneFromCanvas(prev, x - event.movementX, y - event.movementY);
-  if (event.buttons & 1) {
-    vec3.subtract(delta, position, prev);
-    vec3.sub(eye, eye, delta);
-  } else if (event.buttons & 2) {
-    const v = vector(tempVec3, toTargetPlaneFromCanvas(tempVec3, 0, 0), eye);
-    const a = vec3.angle(v, vector(temp2Vec3, position, eye));
-    const aPrev = vec3.angle(v, vector(temp2Vec3, prev, eye));
-    const t = a / aPrev || 1;
-    yfov = Math.min(Math.max(Math.PI / 12, yfov * t), (Math.PI * 2) / 3);
-  } else if (event.buttons & 4) {
-    vec3.subtract(delta, position, prev);
-    vec3.sub(target, target, delta);
-    vec3.sub(eye, eye, delta);
-  }
+    if (e.buttons & 1) {
+      const r = vec3.distance(eye, target);
+      const targetToEye = vec3.normalize(temp, vec3.sub(temp, eye, target));
+      const dTheta = -(dX / canvas.clientWidth) * 2;
+      const dPhi = -(dY / canvas.clientHeight) * 2;
+      const theta = Math.atan2(targetToEye[0], targetToEye[2]) + dTheta;
+      let phi = Math.acos(targetToEye[1]) + dPhi;
+      phi = Math.min(Math.max(0.001, phi), Math.PI - 0.001);
+      targetToEye[0] = Math.sin(phi) * Math.sin(theta);
+      targetToEye[1] = Math.cos(phi);
+      targetToEye[2] = Math.sin(phi) * Math.cos(theta);
+      vec3.scaleAndAdd(eye, target, targetToEye, r);
+    } else if (e.buttons & 2) {
+      const position = raycastToTargetPlane(temp, x, y);
+      const prev = raycastToTargetPlane(temp2, x - dX, y - dY);
+      const delta = vec3.subtract(temp3, position, prev);
+      const rDelta = -Math.sign(dX || dY) * vec3.length(delta);
+      const targetToEye = vec3.sub(temp3, eye, target);
+      const r = vec3.length(targetToEye);
+      vec3.scaleAndAdd(eye, target, targetToEye, (r + rDelta) / r);
+    } else if (e.buttons & 4) {
+      const position = raycastToTargetPlane(temp, x, y);
+      const prev = raycastToTargetPlane(temp2, x - dX, y - dY);
+      const delta = vec3.subtract(temp3, position, prev);
+      vec3.sub(target, target, delta);
+      vec3.sub(eye, eye, delta);
+    }
 
-  mat4.lookAt(view, eye, target, up);
-  updateCameraMatrices();
-}
+    mat4.lookAt(view, eye, target, up);
+    updateCameraMatrices();
+  };
+})();
 
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 canvas.addEventListener("pointerdown", onPointerEvent);
