@@ -1,7 +1,5 @@
 import { mat4, ReadonlyVec3, vec3 } from "gl-matrix";
 
-const up: ReadonlyVec3 = vec3.fromValues(0, 1, 0);
-
 // # setup canvas
 const canvas = document.getElementById("screen") as HTMLCanvasElement;
 
@@ -17,6 +15,7 @@ new ResizeObserver(([entry]) => {
 }).observe(canvas, { box: "content-box" });
 
 // # create camera matrices
+const up: ReadonlyVec3 = vec3.fromValues(0, 1, 0);
 const projection = mat4.create();
 const eye = vec3.fromValues(2, 2, 2);
 const target = vec3.fromValues(0, 0, 0);
