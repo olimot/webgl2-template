@@ -13,7 +13,7 @@ new ResizeObserver(([entry]) => {
   resizeTask = setTimeout(() => Object.assign(canvas, size), 150);
 }).observe(canvas, { box: "content-box" });
 
-// # create camera matrices
+// # setup camera
 const up: ReadonlyVec3 = vec3.fromValues(0, 1, 0);
 const eye = vec3.fromValues(2, 2, 2);
 const target = vec3.fromValues(0, 0, 0);
@@ -33,17 +33,6 @@ function updateCameraMatrices(target = canvas) {
 }
 
 // ## add camera control
-function raycastToPlane(
-  out: vec3,
-  P_0: ReadonlyVec3,
-  V: ReadonlyVec3,
-  N: ReadonlyVec3,
-  d: number,
-) {
-  const t = -(vec3.dot(P_0, N) + d) / vec3.dot(V, N);
-  return vec3.scaleAndAdd(out, P_0, V, t);
-}
-
 const raycastToTargetPlane = (() => {
   const temp = vec3.create();
   const temp2 = vec3.create();
@@ -56,7 +45,10 @@ const raycastToTargetPlane = (() => {
     const N = vec3.normalize(temp2, vec3.sub(temp2, eye, target));
     const V = vec3.normalize(temp3, vec3.sub(temp3, P_0, eye));
     const d = vec3.dot(target, N);
-    return raycastToPlane(out, P_0, V, N, d);
+    
+    // $P = P_0 + \dfrac {-(P_0 \cdot N + d)} {V \cdot N}V$
+    const t = -(vec3.dot(P_0, N) + d) / vec3.dot(V, N);
+    return vec3.scaleAndAdd(out, P_0, V, t);
   };
 })();
 
@@ -124,7 +116,7 @@ gl.colorMask(true, true, true, true);
 gl.clearColor(31 / 255, 31 / 255, 31 / 255, 1);
 gl.clearDepth(1);
 
-// # prepare model data (this is a cube)
+// # prepare model data (cube)
 const vertices = new Float32Array([
   1, 1, -1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, -1, 1, 1, 0, 0, 0, 1, 1,
   -1, -1, 1, 0, 0, 1, 1, -1, 1, 1, -1, 0, 0, 1, 0, -1, 1, -1, -1, 0, 0, 0, 0,
